@@ -1,14 +1,22 @@
 """AI 주간 리포트 DB에 분석 결과 페이지를 생성/업데이트하는 모듈."""
-from notion_client import Client
+import requests
 
 from config import NOTION_API_KEY, REPORT_DB_ID
 
-notion = Client(auth=NOTION_API_KEY)
 CHUNK_SIZE = 100
+_HEADERS = {
+    'Authorization': f'Bearer {NOTION_API_KEY}',
+    'Notion-Version': '2022-06-28',
+    'Content-Type': 'application/json',
+}
+_BASE = 'https://api.notion.com/v1'
 
 
 def _req(path: str, method: str = 'GET', body: dict | None = None) -> dict:
-    return notion.request(path=path, method=method, body=body or {})
+    url = f'{_BASE}/{path}'
+    resp = requests.request(method, url, headers=_HEADERS, json=body or None, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _find_existing(title: str) -> str | None:
@@ -23,13 +31,16 @@ def _find_existing(title: str) -> str | None:
 def _clear_blocks(page_id: str) -> None:
     cursor = None
     while True:
-        query = {'page_size': 100}
+        params = {'page_size': 100}
         if cursor:
-            query['start_cursor'] = cursor
-        res = _req(f'blocks/{page_id}/children', 'GET', query)
+            params['start_cursor'] = cursor
+        url = f'{_BASE}/blocks/{page_id}/children'
+        resp = requests.get(url, headers=_HEADERS, params=params, timeout=30)
+        resp.raise_for_status()
+        res = resp.json()
         for block in res.get('results', []):
             try:
-                _req(f'blocks/{block["id"]}', 'DELETE')
+                requests.delete(f'{_BASE}/blocks/{block["id"]}', headers=_HEADERS, timeout=30)
             except Exception:
                 pass
         if res.get('has_more'):
