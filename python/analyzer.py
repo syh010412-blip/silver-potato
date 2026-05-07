@@ -108,7 +108,7 @@ def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summar
 
     message = client.messages.create(
         model='claude-sonnet-4-6',
-        max_tokens=4000,
+        max_tokens=8000,
         system=SYSTEM_PROMPT,
         messages=[{'role': 'user', 'content': prompt}],
     )
@@ -121,7 +121,8 @@ def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summar
 
     try:
         result = json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        print(f'[AI 분석] JSON 파싱 실패 ({exc}), 원본 앞 500자:\n{raw[:500]}')
         result = json.loads(raw.replace('\x00', '').replace('\r', ''))
 
     print('[AI 분석] 완료')
