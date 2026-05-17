@@ -40,7 +40,7 @@ def _parse_page(page: dict) -> dict:
     props = page['properties']
 
     title = ''.join(t['plain_text'] for t in (props.get('Title') or {}).get('title', []))
-    memo = ''.join(t['plain_text'] for t in (props.get('메모') or {}).get('rich_text', []))
+    memo = ''.join(t['plain_text'] for t in (props.get('memo') or {}).get('rich_text', []))
     processed = (props.get('처리완료') or {}).get('checkbox', False)
     source = ((props.get('출처') or {}).get('select') or {}).get('name', '')
 

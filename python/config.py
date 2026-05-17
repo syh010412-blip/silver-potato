@@ -15,7 +15,15 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 # Google Calendar
 GOOGLE_CREDENTIALS_PATH = os.getenv('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
 GOOGLE_TOKEN_PATH = os.getenv('GOOGLE_TOKEN_PATH', 'token.json')
-CALENDAR_EXCLUDE = [x.strip() for x in os.getenv('CALENDAR_EXCLUDE', '').split(',') if x.strip()]
+
+# 캘린더 제외 목록: 분석기준.txt 우선, 없으면 환경변수 사용
+try:
+    from criteria import get_calendar_excludes as _get_excludes
+    _criteria_excludes = _get_excludes()
+except Exception:
+    _criteria_excludes = []
+_env_excludes = [x.strip() for x in os.getenv('CALENDAR_EXCLUDE', '').split(',') if x.strip()]
+CALENDAR_EXCLUDE = _criteria_excludes if _criteria_excludes else _env_excludes
 
 
 def get_kst_today() -> str:
