@@ -3,21 +3,25 @@ import json
 
 import anthropic
 
-from config import ANTHROPIC_API_KEY, DAY_NAMES
+from config import ANTHROPIC_API_KEY, DAY_NAMES, DAILY_HABITS, TIME_ZONES, GRADE_THRESHOLDS
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 SYSTEM_PROMPT = """당신은 개인 생산성 코치입니다.
-사용자의 구글 캘린더(계획)와 노션 Inbox(실행 캡처)를 비교 분석하여 인사이트를 제공합니다.
+사용자의 구글 캘린더(계획)와 노션 Inbox(실행 캡처)를 비교 분석하여 데이터 기반 인사이트를 제공합니다.
 반드시 유효한 JSON만 출력하세요. 마크다운 코드블록 없이.
-한국어로 응답하세요. 구체적이고 실행 가능한 조언 위주로 작성하세요.
+~해요/~합니다 말투를 사용하세요. 감정적 격려보다 데이터 기반 구체적 조언을 우선합니다.
 """
+
+_HABIT_LIST = ', '.join(DAILY_HABITS)
+_GRADE_DESC = ' / '.join(f'{g}={t}%이상' for g, t in GRADE_THRESHOLDS.items())
+_TZ_DESC = ', '.join(f'{name}({s}~{e}시)' for name, (s, e) in TIME_ZONES.items() if name != '심야')
 
 
 def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict) -> str:
     monday, sunday = week['monday'], week['sunday']
 
-    # 캘린더 이벤트 목록 텍스트
+    # 캘린더 이벤트 목록
     cal_lines = []
     total_cal = 0
     for d in week['dates']:
@@ -29,7 +33,7 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
             cal_lines.append(f'  {d}({day_name}) {time_str} | {ev["title"]} [{ev["calendar"]}]')
     cal_section = '\n'.join(cal_lines) if cal_lines else '  (이벤트 없음)'
 
-    # Inbox 항목 목록 텍스트
+    # Inbox 항목 목록
     inbox_lines = []
     for item in inbox_items:
         proc = '✅ 처리완료' if item['processed'] else '⏳ 미처리'
@@ -42,7 +46,7 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
 
     return f"""아래 데이터를 분석하여 JSON으로 출력하세요.
 
-## 분석 기간
+## 분析 기간
 {monday} (월) ~ {sunday} (일)
 
 ## 구글 캘린더 일정 (계획, 총 {total_cal}건)
@@ -54,16 +58,40 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
 - 출처별: {json.dumps(inbox_summary['by_source'], ensure_ascii=False)}
 {inbox_section}
 
-## 분석 지침
+## 분析 지침
+
+### 계획 vs 실행
 - 캘린더 이벤트(계획)와 Inbox 항목(실행 캡처) 간의 연관성을 찾아 비교하세요.
 - 연관성 기준: 제목·키워드 유사성, 같은 날 비슷한 시간대 등.
-- Inbox는 GTD 수집함으로, 반드시 캘린더와 1:1 매칭이 아닐 수 있습니다.
-- 생활형 루틴(식사·취침·재활치료 등)은 Inbox 캡처 대상이 아닐 수 있으므로
+- Inbox는 GTD 수집함으로, 반드시 캘린더와 1:1 매칭이 아닐 수 있어요.
+- 생활형 루틴(식사·취침·재활치료 등)은 Inbox 캡처 대상이 아닐 수 있어요.
   "기록 없음 ≠ 실행 안 함"으로 해석하세요.
-- 주간 총평은 2~3문장, 일별 인사이트는 각 1문장으로 작성하세요.
+
+### 고정 습관 추적
+추적할 습관 목록: {_HABIT_LIST}
+캘린더 이벤트 또는 Inbox 항목에서 각 습관의 달성 여부를 날짜별로 확인하세요.
+습관명이 정확히 일치하지 않아도 유사 표현(예: "운동", "gym" → "헬스")을 인식하세요.
+
+### 시간대 집중도 분석
+시간대 구간: {_TZ_DESC}
+어느 시간대에 캘린더 일정이 집중되어 있는지, 어느 시간대에 Inbox 캡처가 많은지 파악하세요.
+캘린더 계획이 없는 긴 공백(1시간+)이 있는지 확인하세요 (단, 활동 시간 09:00~23:00 기준).
+
+### 등급 기준 (Inbox 처리율 기반)
+{_GRADE_DESC}
+이 기준으로 주간 등급(A~F)을 부여하고, 판정 근거를 간략히 설명하세요.
+
+### 분析 관점
+- 하루에 계획 대비 실행을 잘했는지 객관적으로 점검
+- 어떤 시간대에 집중력이 좋은지/안 좋은지 파악
+- 고정 습관을 언제 하면 좋을지 파악 (아침 vs 저녁 등)
+- 다음에 어떻게 하면 더 나은 실행이 가능한지 구체적 행동 지침 제시
+- 못함/미처리 항목이 특정 시간대에 몰려있는지 패턴 확인
 
 ## 출력 JSON 형식
 {{
+  "grade": "A|B|C|D|F",
+  "grade_reason": "등급 판정 근거 (1문장)",
   "weekly_overview": "주간 총평 (2~3문장, 캘린더 계획 대비 Inbox 실행 현황 중심)",
   "plan_vs_execution": {{
     "executed_as_planned": [
@@ -83,8 +111,22 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
     "calendar_capture_rate": 0,
     "capture_rate_note": "캘린더 이벤트 중 Inbox에 캡처된 비율 (생활루틴 제외 기준)"
   }},
+  "habits": [
+    {{
+      "habit": "습관명",
+      "days_completed": ["YYYY-MM-DD"],
+      "completion_rate": 0,
+      "evidence": "근거가 된 캘린더/Inbox 항목 요약",
+      "best_time": "이 습관을 주로 한 시간대 (또는 추천 시간대)"
+    }}
+  ],
+  "time_analysis": {{
+    "most_active_zone": "가장 활동이 많은 시간대",
+    "focus_pattern": "집중 패턴 설명 (1~2문장)",
+    "gap_warning": "긴 공백이 발견된 경우 설명, 없으면 null"
+  }},
   "insights": [
-    "인사이트 1 (구체적인 관찰)",
+    "인사이트 1 (구체적 데이터 기반 관찰)",
     "인사이트 2",
     "인사이트 3"
   ],
@@ -104,7 +146,7 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
 
 
 def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict) -> dict:
-    print('[AI 분석] Claude에 분석 요청 중...')
+    print('[AI 분析] Claude에 분析 요청 중...')
     prompt = _build_prompt(week, cal_by_date, inbox_items, inbox_summary)
 
     message = client.messages.create(
@@ -123,8 +165,8 @@ def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summar
     try:
         result = json.loads(raw)
     except json.JSONDecodeError as exc:
-        print(f'[AI 분석] JSON 파싱 실패 ({exc}), 원본 앞 500자:\n{raw[:500]}')
+        print(f'[AI 분析] JSON 파싱 실패 ({exc}), 원본 앞 500자:\n{raw[:500]}')
         result = json.loads(raw.replace('\x00', '').replace('\r', ''))
 
-    print('[AI 분석] 완료')
+    print('[AI 분析] 완료')
     return result

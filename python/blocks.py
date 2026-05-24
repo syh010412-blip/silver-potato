@@ -1,5 +1,4 @@
 """Notion 블록 빌더 모듈."""
-from typing import Any
 
 # ── 리치텍스트 헬퍼 ──────────────────────────────────────────────
 
@@ -43,7 +42,7 @@ def heading3(text: str) -> dict:
     }
 
 
-def callout(rich_texts: list[dict] | str, emoji: str = '📌', color: str = 'default') -> dict:
+def callout(rich_texts: list | str, emoji: str = '📌', color: str = 'default') -> dict:
     if isinstance(rich_texts, str):
         rich_texts = [rt(rich_texts)]
     return {
@@ -56,7 +55,7 @@ def callout(rich_texts: list[dict] | str, emoji: str = '📌', color: str = 'def
     }
 
 
-def bullet(rich_texts: list[dict] | str) -> dict:
+def bullet(rich_texts: list | str) -> dict:
     if isinstance(rich_texts, str):
         rich_texts = [rt(rich_texts)]
     return {
@@ -65,7 +64,7 @@ def bullet(rich_texts: list[dict] | str) -> dict:
     }
 
 
-def numbered(rich_texts: list[dict] | str) -> dict:
+def numbered(rich_texts: list | str) -> dict:
     if isinstance(rich_texts, str):
         rich_texts = [rt(rich_texts)]
     return {
@@ -74,7 +73,7 @@ def numbered(rich_texts: list[dict] | str) -> dict:
     }
 
 
-def paragraph(rich_texts: list[dict] | str) -> dict:
+def paragraph(rich_texts: list | str) -> dict:
     if isinstance(rich_texts, str):
         rich_texts = [rt(rich_texts)]
     return {
@@ -117,6 +116,12 @@ def toggle_heading2(text: str, children: list[dict]) -> dict:
     }
 
 
+# ── 등급 이모지 헬퍼 ────────────────────────────────────────────
+
+_GRADE_EMOJI = {'A': '🏆', 'B': '🥈', 'C': '🥉', 'D': '⚠️', 'F': '🔴'}
+_GRADE_COLOR = {'A': 'green_background', 'B': 'blue_background', 'C': 'yellow_background', 'D': 'orange_background', 'F': 'red_background'}
+
+
 # ── 메인 리포트 빌더 ─────────────────────────────────────────────
 
 def build_report_blocks(
@@ -129,18 +134,31 @@ def build_report_blocks(
     monday, sunday = week['monday'], week['sunday']
     blocks: list[dict] = []
 
-    # ── 헤더 ──────────────────────────────────────────────────────
     metrics = analysis.get('metrics', {})
     cal_total = metrics.get('total_calendar_events', 0)
     inbox_total = metrics.get('total_inbox_items', 0)
     inbox_rate = inbox_summary.get('process_rate', 0)
+    grade = analysis.get('grade', '-')
+    grade_emoji = _GRADE_EMOJI.get(grade, '📊')
+    grade_color = _GRADE_COLOR.get(grade, 'blue_background')
 
+    # ── 헤더 ──────────────────────────────────────────────────────
     blocks.append(callout(
         [
-            rt(f'{monday} ~ {sunday}  주간 활동 분석 리포트\n', bold=True),
+            rt(f'{monday} ~ {sunday}  주간 활동 분析 리포트\n', bold=True),
             rt(f'캘린더 일정 {cal_total}건  |  Inbox 캡처 {inbox_total}건  |  처리율 {inbox_rate}%'),
         ],
         '📊', 'blue_background',
+    ))
+
+    # 등급 callout
+    grade_reason = analysis.get('grade_reason', '')
+    blocks.append(callout(
+        [
+            rt(f'주간 등급: {grade}  {grade_emoji}\n', bold=True),
+            rt(grade_reason),
+        ],
+        grade_emoji, grade_color,
     ))
     blocks.append(divider())
 
@@ -159,26 +177,24 @@ def build_report_blocks(
             ['→ 처리 완료', f'{inbox_summary["processed"]}개'],
             ['→ 미처리', f'{inbox_summary["unprocessed"]}개'],
             ['Inbox 처리율', f'{inbox_rate}%'],
-            ['캘린더 캡처율', f'{metrics.get("capture_rate_note", "-")}'],
+            ['캘린더 캡처율', metrics.get('capture_rate_note', '-')],
         ],
     ))
     blocks.append(divider())
 
     # ── 계획 vs 실행 ──────────────────────────────────────────────
-    blocks.append(heading1('📅 계획 vs 실행 분석'))
+    blocks.append(heading1('📅 계획 vs 실행 分析'))
 
     pve = analysis.get('plan_vs_execution', {})
 
-    # 계획대로 실행된 것
     executed = pve.get('executed_as_planned', [])
     blocks.append(heading2(f'✅ 계획대로 실행된 것 ({len(executed)}건)'))
     if executed:
         rows = [[e.get('date', ''), e.get('calendar_event', ''), e.get('inbox_item', ''), e.get('note', '')] for e in executed]
         blocks.append(table(['날짜', '캘린더(계획)', 'Inbox(실행)', '연관성'], rows))
     else:
-        blocks.append(paragraph([rt('직접 매칭되는 항목이 없거나 확인 불가합니다.', color='gray')]))
+        blocks.append(paragraph([rt('직접 매칭되는 항목이 없거나 확인 불가해요.', color='gray')]))
 
-    # 계획에 없었지만 캡처된 것
     unplanned = pve.get('unplanned_captures', [])
     blocks.append(heading2(f'🆕 계획에 없었지만 캡처된 것 ({len(unplanned)}건)'))
     if unplanned:
@@ -190,27 +206,71 @@ def build_report_blocks(
         ]
         blocks.append(table(['날짜', 'Inbox 항목', '상태', '의미'], rows))
     else:
-        blocks.append(paragraph([rt('캘린더 외 별도 캡처 없음.', color='gray')]))
+        blocks.append(paragraph([rt('캘린더 외 별도 캡처 없어요.', color='gray')]))
 
-    # 계획했지만 캡처 안 된 것
     not_captured = pve.get('planned_not_captured', [])
     blocks.append(heading2(f'❌ 계획했지만 캡처되지 않은 것 ({len(not_captured)}건)'))
     if not_captured:
         rows = [[n.get('date', ''), n.get('calendar_event', ''), n.get('reason', '')] for n in not_captured]
         blocks.append(table(['날짜', '캘린더 이벤트', '미캡처 이유'], rows))
     else:
-        blocks.append(paragraph([rt('없음', color='gray')]))
+        blocks.append(paragraph([rt('없어요.', color='gray')]))
 
     blocks.append(divider())
 
-    # ── Inbox 출처별 분석 ─────────────────────────────────────────
+    # ── 습관 추적 ─────────────────────────────────────────────────
+    habits = analysis.get('habits', [])
+    if habits:
+        blocks.append(heading1('🏃 고정 습관 추적'))
+        habit_rows = []
+        for h in habits:
+            days_done = len(h.get('days_completed', []))
+            rate = h.get('completion_rate', 0)
+            bar = '■' * round(rate / 10) + '□' * (10 - round(rate / 10))
+            best_time = h.get('best_time', '-')
+            habit_rows.append([
+                h.get('habit', ''),
+                f'{days_done}일 / 7일',
+                f'{rate}%',
+                bar,
+                best_time,
+            ])
+        blocks.append(table(['습관', '달성', '달성률', '진행도', '적합 시간대'], habit_rows))
+
+        # 습관별 달성 일자 (토글)
+        habit_detail_children = []
+        for h in habits:
+            evidence = h.get('evidence', '')
+            days = ', '.join(h.get('days_completed', [])) or '없음'
+            habit_detail_children.append(bullet(
+                [rt(f'{h.get("habit", "")}: ', bold=True), rt(f'{days}  |  근거: {evidence}')]
+            ))
+        blocks.append(toggle_heading2('📋 습관 달성 상세', habit_detail_children))
+        blocks.append(divider())
+
+    # ── 시간대 분析 ───────────────────────────────────────────────
+    time_analysis = analysis.get('time_analysis', {})
+    if time_analysis:
+        blocks.append(heading1('⏰ 시간대 生産性 分析'))
+        most_active = time_analysis.get('most_active_zone', '-')
+        focus_pattern = time_analysis.get('focus_pattern', '')
+        gap_warning = time_analysis.get('gap_warning')
+
+        blocks.append(callout(
+            [rt(f'가장 활동적인 시간대: {most_active}\n', bold=True), rt(focus_pattern)],
+            '⏰', 'purple_background',
+        ))
+        if gap_warning:
+            blocks.append(callout(gap_warning, '⚠️', 'orange_background'))
+        blocks.append(divider())
+
+    # ── Inbox 현황 ────────────────────────────────────────────────
     blocks.append(heading1('📥 Inbox 현황'))
 
     source_rows = [[src, str(cnt)] for src, cnt in inbox_summary.get('by_source', {}).items()]
     if source_rows:
         blocks.append(table(['출처', '건수'], source_rows))
 
-    # Inbox 전체 목록 (토글)
     inbox_children: list[dict] = []
     if inbox_items:
         item_rows = [
@@ -227,7 +287,6 @@ def build_report_blocks(
     else:
         inbox_children.append(paragraph('이번 주 Inbox 항목 없음'))
     blocks.append(toggle_heading2(f'📋 Inbox 전체 목록 ({inbox_total}건)', inbox_children))
-
     blocks.append(divider())
 
     # ── 구글 캘린더 일정 요약 ─────────────────────────────────────
@@ -245,9 +304,8 @@ def build_report_blocks(
             cal_children.append(heading3(f'{day_name} {d} ({len(events)}건)'))
             cal_children.append(table(['시간', '이벤트', '캘린더'], day_rows))
         else:
-            cal_children.append(bullet(f'{day_name} {d} — 일정 없음'))
+            cal_children.append(bullet(f'{day_name} {d} — 일정 없어요'))
     blocks.append(toggle_heading2(f'📅 일별 캘린더 ({cal_total}건)', cal_children))
-
     blocks.append(divider())
 
     # ── 인사이트 & 패턴 ──────────────────────────────────────────
@@ -281,10 +339,10 @@ def build_report_blocks(
     blocks.append(heading1('🚀 다음 주 제안'))
 
     suggestions = analysis.get('next_week_suggestions', [])
-    for i, sug in enumerate(suggestions, 1):
+    for sug in suggestions:
         blocks.append(numbered(sug))
 
     blocks.append(divider())
-    blocks.append(callout('Claude AI가 분석한 주간 리포트입니다.', '🤖', 'gray_background'))
+    blocks.append(callout('🤖 Claude AI가 자동 분析한 주간 리포트입니다.', '🤖', 'gray_background'))
 
     return blocks
