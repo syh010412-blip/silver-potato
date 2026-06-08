@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "auth": "node src/google-auth.js"
+    "auth": "node src/google-auth.js",
+    "rehab": "node rehab.js",
+    "rehab:trends": "node rehab.js trends"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
