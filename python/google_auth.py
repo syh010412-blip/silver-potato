@@ -20,10 +20,21 @@ def _get_creds_github():
     return creds
 
 
+def _restore_token_from_env() -> None:
+    """GOOGLE_TOKEN_JSON 환경변수에서 token.json 복원."""
+    import base64
+    encoded = os.environ.get('GOOGLE_TOKEN_JSON', '')
+    if encoded and not os.path.exists(GOOGLE_TOKEN_PATH):
+        with open(GOOGLE_TOKEN_PATH, 'w') as f:
+            f.write(base64.b64decode(encoded).decode())
+
+
 def _get_creds_local():
     """로컬: token.json에서 읽고 만료 시 직접 HTTP로 갱신."""
     import requests
     from google.oauth2.credentials import Credentials
+
+    _restore_token_from_env()
 
     if not os.path.exists(GOOGLE_TOKEN_PATH):
         print('[오류] 인증이 필요합니다: python3 auth_manual.py url')
