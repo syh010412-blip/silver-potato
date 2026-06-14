@@ -38,6 +38,7 @@ async function choose(question, options) {
 const session = {
   date: getKSTToday(),
   condition: null,
+  mood: null,
   completedSteps: [],
   rangeOfMotion: null,
   painLevel: null,
@@ -195,8 +196,13 @@ async function recordCompletion() {
   }
 
   if (!session.condition) {
-    const n = await choose('오늘 전체 컨디션은?', ['좋았어요', '보통', '힘들었어요']);
-    session.condition = ['좋아요', '보통이에요', '별로예요'][n];
+    const n = await choose('오늘 전체 컨디션은?', ['최고 💫', '좋음 🙂', '보통 😐', '나쁨 😔', '매우 나쁨 😢']);
+    session.condition = ['최고', '좋음', '보통', '나쁨', '매우 나쁨'][n];
+  }
+
+  if (!session.mood) {
+    const n = await choose('오늘 기분은 어때요?', ['😄 행복', '🙂 괜찮음', '😐 그저 그럼', '😔 우울', '😢 힘듦']);
+    session.mood = ['😄 행복', '🙂 괜찮음', '😐 그저 그럼', '😔 우울', '😢 힘듦'][n];
   }
 
   console.log('\n오늘 잘된 점을 메모하고 싶으면 입력해주세요. (건너뛰려면 Enter)');
@@ -216,6 +222,7 @@ async function recordCompletion() {
         날짜: { date: { start: session.date } },
         '오늘 한 재활 운동': { rich_text: [{ text: { content: routineSummary } }] },
         컨디션: { select: { name: session.condition } },
+        기분: { select: { name: session.mood } },
         '통증 수준 (0~10)': { number: painScore },
         '왼팔 움직임 (0~10)': { number: romScore },
         '나아진 점 / 메모': { rich_text: [{ text: { content: session.memo } }] },
@@ -237,6 +244,7 @@ async function recordCompletion() {
 
 💪 왼팔 가동범위: ${session.rangeOfMotion} (${romScore}/10)
 😊 컨디션: ${session.condition}
+💭 기분: ${session.mood}
 🗓 날짜: ${session.date}
 📋 완료 운동: ${routineSummary}
 
@@ -305,8 +313,8 @@ async function viewTrends() {
 async function startRehab() {
   console.log('\n💪 왼팔 재활 도우미 시작!\n');
 
-  const condIdx = await choose('오늘 컨디션 어때요? 😊', ['😊 좋아요', '😐 보통이에요', '😔 별로예요']);
-  session.condition = ['좋아요', '보통이에요', '별로예요'][condIdx];
+  const condIdx = await choose('오늘 컨디션 어때요? 😊', ['😊 좋아요 (좋음)', '😐 보통이에요 (보통)', '😔 별로예요 (나쁨)']);
+  session.condition = ['좋음', '보통', '나쁨'][condIdx];
 
   const painIdx = await choose('왼팔 쪽에 지금 통증 있어요?', ['없어요', '살짝 있어요', '좀 있어요']);
   if (painIdx === 2) {
