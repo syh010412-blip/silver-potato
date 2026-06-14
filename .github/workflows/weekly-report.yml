@@ -3,7 +3,12 @@ name: Weekly Analysis Report
 on:
   schedule:
     - cron: '0 8 * * 0'  # 매주 일요일 17:00 KST (= UTC 08:00)
-  workflow_dispatch:       # 수동 실행 가능
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: '분석할 날짜 (YYYY-MM-DD). 비우면 오늘 기준 이번 주.'
+        required: false
+        default: ''
 
 permissions:
   id-token: write
@@ -40,4 +45,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NOTION_INBOX_DB_ID: ${{ secrets.NOTION_INBOX_DB_ID }}
           NOTION_REPORT_DB_ID: ${{ secrets.NOTION_REPORT_DB_ID }}
+          REPORT_DATE: ${{ github.event.inputs.report_date }}
         run: python3 main.py
