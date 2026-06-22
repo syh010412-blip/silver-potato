@@ -22,6 +22,10 @@ python/credentials.json
 *.log
 python/report.log
 
+# Claude Code 설정 (토큰 등 민감 정보 포함)
+.claude/settings.json
+.claude/settings.local.json
+
 # 기타
 .DS_Store
 node_modules/
