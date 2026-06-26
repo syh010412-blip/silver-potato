@@ -9,6 +9,8 @@ NOTION_API_KEY = os.getenv('NOTION_API_KEY', '')
 INBOX_DB_ID = os.getenv('NOTION_INBOX_DB_ID') or '81c6e06c-3979-4922-a591-58dd1cd46b34'
 REPORT_DB_ID = os.getenv('NOTION_REPORT_DB_ID') or '34da3bd9-3958-8007-82ee-efb717e2658f'
 REHAB_DB_ID = os.getenv('NOTION_REHAB_DB_ID') or 'e6462d82-a461-419f-bd95-db0207ea7198'
+DIARY_DB_ID = os.getenv('NOTION_DIARY_DB_ID') or '213a3bd9-3958-811a-bdb0-000bb131e523'
+HABIT_DB_ID = os.getenv('NOTION_HABIT_DB_ID') or '1c8a3bd9-3958-814f-8166-000beffdc45e'
 
 # Anthropic
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')

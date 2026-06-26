@@ -14,7 +14,19 @@ SYSTEM_PROMPT = """당신은 개인 생산성 코치입니다.
 """
 
 
-def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict) -> str:
+def _build_diary_section(diary_items: list[dict]) -> str:
+    if not diary_items:
+        return '## 일기\n  (이번 주 일기 없음)\n'
+    lines = ['## 일기 (Comment 필드 기준)']
+    for item in diary_items:
+        lines.append(f'  {item["date"]} [{item["title"]}]')
+        if item['comment']:
+            lines.append(f'    {item["comment"]}')
+    return '\n'.join(lines)
+
+
+def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict,
+                  diary_items: list[dict] | None = None) -> str:
     monday, sunday = week['monday'], week['sunday']
 
     # 캘린더 이벤트 목록 텍스트
@@ -40,6 +52,38 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
         )
     inbox_section = '\n'.join(inbox_lines) if inbox_lines else '  (항목 없음)'
 
+    diary_section = _build_diary_section(diary_items or [])
+    has_diary = bool(diary_items)
+
+    diary_output_schema = '''
+  "diary_analysis": {
+    "total_entries": 0,
+    "recording_rate": "X일 기록 (7일 중)",
+    "overall_sentiment": "전체 감정 총평 (2~3문장, 따뜻하고 공감 어린 톤으로)",
+    "sentiment_counts": {"positive": 0, "negative": 0, "neutral": 0},
+    "emotional_patterns": {
+      "positive": "긍정 감정이 올라오는 상황 패턴",
+      "negative": "부정 감정이 생기는 상황 패턴"
+    },
+    "day_sentiments": [
+      {"date": "YYYY-MM-DD", "sentiment": "positive|negative|neutral", "emoji": "🟢|🔴|⬜", "preview": "일기 첫 40자 미리보기"}
+    ],
+    "topics": [
+      {"name": "주제명", "count": 0}
+    ],
+    "frequent_words": ["단어1", "단어2", "단어3"],
+    "growth_points": {
+      "strengths": "잘 하고 있는 점 (구체적으로)",
+      "improvements": "개선 포인트 (부드럽게)"
+    },
+    "self_care_suggestions": [
+      "자기돌봄 제안 1",
+      "자기돌봄 제안 2",
+      "자기돌봄 제안 3"
+    ]
+  },''' if has_diary else '''
+  "diary_analysis": null,'''
+
     return f"""아래 데이터를 분석하여 JSON으로 출력하세요.
 
 ## 분석 기간
@@ -54,6 +98,8 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
 - 출처별: {json.dumps(inbox_summary['by_source'], ensure_ascii=False)}
 {inbox_section}
 
+{diary_section}
+
 ## 분석 지침
 - 캘린더 이벤트(계획)와 Inbox 항목(실행 캡처) 간의 연관성을 찾아 비교하세요.
 - 연관성 기준: 제목·키워드 유사성, 같은 날 비슷한 시간대 등.
@@ -61,6 +107,7 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
 - 생활형 루틴(식사·취침·재활치료 등)은 Inbox 캡처 대상이 아닐 수 있으므로
   "기록 없음 ≠ 실행 안 함"으로 해석하세요.
 - 주간 총평은 2~3문장, 일별 인사이트는 각 1문장으로 작성하세요.
+- 일기 분석 시 감정을 판단하되 공감 어린 톤을 유지하세요. 한 단어로 positive/negative/neutral 분류.
 
 ## 출력 JSON 형식
 {{
@@ -99,13 +146,14 @@ def _build_prompt(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_
     "구체적 행동 제안 3",
     "구체적 행동 제안 4",
     "구체적 행동 제안 5"
-  ]
+  ]{diary_output_schema}
 }}"""
 
 
-def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict) -> dict:
+def analyze(week: dict, cal_by_date: dict, inbox_items: list[dict], inbox_summary: dict,
+            diary_items: list[dict] | None = None) -> dict:
     print('[AI 분석] Claude에 분석 요청 중...')
-    prompt = _build_prompt(week, cal_by_date, inbox_items, inbox_summary)
+    prompt = _build_prompt(week, cal_by_date, inbox_items, inbox_summary, diary_items)
 
     message = client.messages.create(
         model='claude-sonnet-4-6',

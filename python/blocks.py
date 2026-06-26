@@ -117,6 +117,147 @@ def toggle_heading2(text: str, children: list[dict]) -> dict:
     }
 
 
+# ── 일기 분석 섹션 빌더 ──────────────────────────────────────────
+
+def build_diary_section(diary_analysis: dict) -> list[dict]:
+    blocks: list[dict] = []
+    blocks.append(heading1('📔 일기 분석'))
+
+    if not diary_analysis:
+        blocks.append(paragraph([rt('이번 주 일기 없음.', color='gray')]))
+        return blocks
+
+    sc = diary_analysis.get('sentiment_counts', {})
+    pos = sc.get('positive', 0)
+    neg = sc.get('negative', 0)
+    neu = sc.get('neutral', 0)
+    total = pos + neg + neu
+
+    sentiment_bar = '🟢' * pos + '🔴' * neg + '⬜' * neu
+    blocks.append(callout(
+        [
+            rt(diary_analysis.get('overall_sentiment', '')),
+            rt(f'\n긍정 {pos}개  부정 {neg}개  중립 {neu}개\n{sentiment_bar}', color='gray'),
+        ],
+        '📊', 'blue_background',
+    ))
+
+    blocks.append(heading2('📝 기록 습관'))
+    blocks.append(paragraph([
+        rt('기록률: ', bold=True),
+        rt(diary_analysis.get('recording_rate', f'{total}일 기록'), color='green'),
+    ]))
+
+    blocks.append(heading2('💜 감정 패턴 분석'))
+    ep = diary_analysis.get('emotional_patterns', {})
+    if ep.get('positive'):
+        blocks.append(callout(
+            [rt('긍정 패턴 🌟\n', bold=True), rt(ep['positive'])],
+            '🟢', 'green_background',
+        ))
+    if ep.get('negative'):
+        blocks.append(callout(
+            [rt('부정 패턴 😔\n', bold=True), rt(ep['negative'])],
+            '🔴', 'red_background',
+        ))
+
+    day_sentiments = diary_analysis.get('day_sentiments', [])
+    if day_sentiments:
+        blocks.append(heading2('📆 요일별 감정'))
+        rows = [
+            [d['date'], d.get('emoji', '⬜'), d.get('preview', '')]
+            for d in day_sentiments
+        ]
+        blocks.append(table(['날짜', '감정', '미리보기'], rows))
+
+    topics = diary_analysis.get('topics', [])
+    if topics:
+        blocks.append(heading2('🏷️ 자주 다룬 주제'))
+        blocks.append(table(['주제', '빈도'], [[t['name'], f'{t["count"]}회'] for t in topics]))
+
+    words = diary_analysis.get('frequent_words', [])
+    if words:
+        blocks.append(heading2('🔤 자주 쓴 단어'))
+        blocks.append(paragraph([rt('  ·  '.join(words), color='gray')]))
+
+    gp = diary_analysis.get('growth_points', {})
+    if gp:
+        blocks.append(heading2('🌱 성장 포인트'))
+        if gp.get('strengths'):
+            blocks.append(callout(
+                [rt('💪 강점\n', bold=True), rt(gp['strengths'])],
+                '💪', 'green_background',
+            ))
+        if gp.get('improvements'):
+            blocks.append(callout(
+                [rt('🔧 개선 포인트\n', bold=True), rt(gp['improvements'])],
+                '🔧', 'yellow_background',
+            ))
+
+    suggestions = diary_analysis.get('self_care_suggestions', [])
+    if suggestions:
+        blocks.append(heading2('✨ 자기돌봄 제안'))
+        for sug in suggestions:
+            blocks.append(numbered(sug))
+
+    if day_sentiments:
+        log_children: list[dict] = [
+            bullet([
+                rt(f'{d["date"]} {d.get("emoji", "⬜")}  ', bold=True),
+                rt(d.get('preview', ''), color='gray'),
+            ])
+            for d in day_sentiments
+        ]
+        blocks.append(toggle_heading2(f'📋 일별 기록 로그 ({total}건)', log_children))
+
+    return blocks
+
+
+# ── 습관 트래커 섹션 빌더 ─────────────────────────────────────────
+
+def build_habit_section(habit_items: list[dict], habit_summary: dict) -> list[dict]:
+    blocks: list[dict] = []
+    blocks.append(heading1('✅ 습관 트래커'))
+
+    total_days = habit_summary.get('total_days', 0)
+    if total_days == 0:
+        blocks.append(paragraph([rt('이번 주 습관 기록 없음.', color='gray')]))
+        return blocks
+
+    avg_rate = habit_summary.get('avg_completion_rate', 0)
+    blocks.append(callout(
+        f'평균 달성률 {avg_rate}%  |  기록 {total_days}일',
+        '📊', 'blue_background',
+    ))
+
+    habit_completion = habit_summary.get('habit_completion', {})
+    if habit_completion:
+        rows = [
+            [h, f'{v["count"]}/{total_days}일', f'{v["rate"]}%']
+            for h, v in habit_completion.items()
+        ]
+        blocks.append(table(['습관', '달성 일수', '달성률'], rows))
+
+    detail_children: list[dict] = []
+    for item in habit_items:
+        done = [h for h, v in item['habits'].items() if v]
+        miss = [h for h, v in item['habits'].items() if not v]
+        sleep_str = ''
+        if item.get('wake_up') or item.get('in_bed'):
+            sleep_str = f'  기상 {item["wake_up"] or "-"} / 취침 {item["in_bed"] or "-"}'
+        detail_children.append(heading3(
+            f'{item["date"]} — {item["completed"]}/{item["total"]}개 달성{sleep_str}'
+        ))
+        if done:
+            detail_children.append(bullet('달성: ' + '  '.join(done)))
+        if miss:
+            detail_children.append(bullet([rt('미달성: ' + '  '.join(miss), color='gray')]))
+
+    blocks.append(toggle_heading2(f'📋 일별 습관 상세 ({total_days}일)', detail_children))
+
+    return blocks
+
+
 # ── 재활 섹션 빌더 ──────────────────────────────────────────────
 
 def build_rehab_section(rehab_items: list[dict], rehab_summary: dict) -> list[dict]:
@@ -176,6 +317,9 @@ def build_report_blocks(
     analysis: dict,
     rehab_items: list[dict] | None = None,
     rehab_summary: dict | None = None,
+    diary_items: list[dict] | None = None,
+    habit_items: list[dict] | None = None,
+    habit_summary: dict | None = None,
 ) -> list[dict]:
     monday, sunday = week['monday'], week['sunday']
     blocks: list[dict] = []
@@ -338,6 +482,17 @@ def build_report_blocks(
     # ── 재활 기록 ─────────────────────────────────────────────────
     if rehab_items is not None and rehab_summary is not None:
         blocks.extend(build_rehab_section(rehab_items, rehab_summary))
+        blocks.append(divider())
+
+    # ── 일기 분석 ─────────────────────────────────────────────────
+    diary_analysis = analysis.get('diary_analysis')
+    if diary_analysis is not None:
+        blocks.extend(build_diary_section(diary_analysis))
+        blocks.append(divider())
+
+    # ── 습관 트래커 ───────────────────────────────────────────────
+    if habit_items is not None and habit_summary is not None:
+        blocks.extend(build_habit_section(habit_items, habit_summary))
         blocks.append(divider())
 
     blocks.append(callout('Claude AI가 분석한 주간 리포트입니다.', '🤖', 'gray_background'))
